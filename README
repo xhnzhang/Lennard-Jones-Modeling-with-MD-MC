@@ -1,0 +1,162 @@
+MD/MC simulations of LJ particles of Argon
+==========================================
+Created by Xiaohong Zhang (Clemson U, xiaohoz@g.clemson.edu), Mar 23, 2018
+
+
+This folder contains two python scripts (md.py and mc.py) 
+to run MD/MC simulations of Lennard-Jones (LJ) particles of Argon.
+MD simulation can run with NVE or NVT ensembles and MC simulation can
+only run in NVT ensemble.
+
+1.  Getting started
+===================
+
+  * If running these scripts on a supercomputer (e.g., Palmetto from Clemson),
+    request an interactive node with graphical user interface (GUI), e.g.,
+    $ qsub -X -I -l select=1:ncpus=20:mpiprocs=20:mem=60gb,walltime=4:00:00
+
+  * If running on a local machine, may need Python IDE for displaying graph.
+
+  * Then load python module. If using on Palmetto, do
+    $ module purge
+    $ module load anaconda3/4.2.0
+
+  * To run MD simulation, do
+    $ python md.py
+
+    Or you can select parameters as below (default)
+    $ python md.py -n 100 -b 15 -t 1.0 -r 1000 -e NVE -l ps -i velverlet -c berendsen
+
+  * To run MC simulation, do
+    $ python mc.py
+    
+    Or you can select parameters as below (default)
+    $ python mc.py -n 100 -b 15 -t 1.0 -r 10000  -l ps
+
+
+  * For more executing information, do,
+    $ python md.py --help 
+    $ python mc.py --help
+
+
+2.  Simulating system
+=====================
+
+  * Input information --  no extra input files are needed to run md/mc simulation.
+
+    Functions initUnifPos() and initVel() are used to create a cubic box filled 
+    with particles with random velocities scaled to Maxwell-Boltzmann (MB) distribution. 
+
+    You can specify the number of particles and box length in command line arguments: 
+    	-n   number of particles
+    	-b   box length  (in units of sigma)
+
+    You can also specify ensemble temperature:
+        -t   temperature (in units of epsilon/kB)
+
+    where sigma and epsilon are LJ potential distance and energy, 
+    kB is Boltzmann constant.
+
+    !!!!!! NOTE: since these scripts do not have energy minimization procedure,
+    	         it's better to set a larger box with fewer particles in order 
+    	         to avoid bad initial configuration. I've tested with 100 particles
+                 in a box with length of 10.0 and the box blows up (velocity 
+                 increases dramatically).
+
+    ----------------------------------------------------------------------------------
+
+  * Start simulation -- calculate LJ potential and force 
+
+  	Functions getForce() in md.py and getLJ() in mc.py use LJ potential to calculate 
+  	pair-wise interaction between two particles. PBC is used. The cutoff distance is 2.5 (in units
+  	of sigma). Four methods of tail correction can be chosen. You can specify one method
+  	via command line arguments:
+  		-l ps          # potential shift
+  		-l fs          # force shift
+  		-l psw         # potential switch
+  		-l trunc       # simply truncate at cutoff distance            
+
+    ----------------------------------------------------------------------------------
+
+  *  MD time integration -- integrate equation of motion in MD simulation
+
+  	Function integration() in md.py implements position/velocity integration during
+  	MD simulation. Three algorithms can be chosen. You can specify one method
+  	via command line arguments:
+  		-i verlet      # verlet algorithm
+  		-i leapfrog    # leapfrog algorithm
+  		-i velverlet   # leapfrog algorithm
+
+    !!!!!! NOTE: verlet algorithm behaves weird in both NVT and NVE simulation. 
+    			 The trajectories look normal but the temperature (T) blows up randomly.
+    			 Actually, it's not that random since T usually blows up when particle
+    			 crosses the box boundary. I've tested both wrapped and unwrapped position,
+    			 the "less than half box" distance but still didn't fix this problem.
+    			 Please choose the other two algorithms when you test both scripts.
+
+    ----------------------------------------------------------------------------------
+
+  * MD temperature control  -- in NVT ensemble
+
+  	Inside integration() function of md.py script, there is a flag to decide whether 
+  	or not to run NVT ensemble. Two thermostsat can be chosen. You can specify one 
+  	thermostsat via command line arguments:
+
+  		-e NVT         # NVT ensemble
+  		-c berendsen   # thermostat coupling
+
+  	The berendsen coupling parameter and andersen collision frequency are not allowed to 
+  	specify in the command line arguments, but you can still adjust such parameters inside
+  	md.py script (line 35 and 36).
+
+    ----------------------------------------------------------------------------------
+
+   * MC particle move
+
+   	 In mc.py, one particle is chosen randomly to move in one loop. The maximum displacement 
+   	 is set to be 1.5. It's not allowed to specify in the command line arguments but you 
+   	 can adjust inside mc.py script (line 26).
+
+    ----------------------------------------------------------------------------------
+
+   * Running steps
+
+     Both scripts do not have further speedup tricks, like building neighbor list or using 
+     multi-processing methods. Thus, these codes are relatively slow. When testing 10000 steps
+     for MD simulation on Palmetto phase 5a with one core, it took ~20 min. It's better to
+     request a higher phase and run less steps like 1000 (default) for MD. The speed for 
+     MC code is faster than MD due to less computation and running 10000 (default) took ~30 s.
+     You can also specify running steps via command line arguments:
+
+     	-r 1000        # for MD
+     	-r 10000       # for MC
+
+
+3.  Outputs
+=====================
+
+   * MD
+
+   	 If you request Palmetto node with GUI, you will see a thermodynamic value graph popping
+   	 up after MD simulation is done. This graph plots temperature, potential energy, kinetic
+   	 energy and total energy of the system along the simulation. All values are converted to
+   	 real units. If you cannot see this graph, you can also use the file "thermoVal.txt" to 
+   	 plot these properties. 
+
+   	 thermoVal.txt         ---   thermo Values: time(ps), temp(K), en  ek  etot in (kJ/mol)
+     init_pos.xyz          ---   check initial position, can be visualized in VMD
+     initSpeedDist.data    ---   initial speed distribution, check to see if satisfy MB
+     initSpeed.png         ---   plot of initial speed distribution
+     mdTraj.xyz            ---   trajectory of MD simulation, can be visualized in VMD
+
+
+    * MC
+
+   	 If you request Palmetto node with GUI, you will see a thermodynamic value graph popping
+   	 up after MD simulation is done. This graph plots potential energy and running average 
+   	 potential energy along the simulation. All values are converted to real units. 
+   	 If you cannot see this graph, you can also use the file "thermoVal.txt" to plot these properties. 
+
+   	 thermoVal.txt         ---   thermo Values: steps, en  avg_en in (kJ/mol)
+     init_pos.xyz          ---   check initial position, can be visualized in VMD
+     mcTraj.xyz            ---   trajectory of MC simulation, can be visualized in VMD    
